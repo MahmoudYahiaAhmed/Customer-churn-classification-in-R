@@ -1,0 +1,516 @@
+```{r}
+# install.packages("dplyr")
+# install.packages("corrplot")
+# install.packages("ggplot2")
+# install.packages("gridExtra")
+# install.packages("ggthemes")
+# install.packages("randomForest")
+# install.packages("party")
+# install.packages("MASS")
+# install.packages("caret")
+# install.packages("GGally")
+# install.packages("reshape2")
+# install.packages("arules")
+# install.packages("caTools")
+# install.packages("partykit")
+# install.packages("rpart.plot")
+# install.packages("Hmisc")
+# install.packages("xgboost")
+# install.packages("arules")
+# install.packages("partykit")
+# install.packages("rpart.plot")
+# install.packages("scales")
+# install.packages("keras")
+# install.packages("tensorflow")
+# install.packages("pROC")
+library(reshape2)
+library(plyr)
+library(dplyr)
+library(corrplot)
+library(ggplot2)
+library(gridExtra)
+library(ggthemes)
+library(caret)
+library(MASS)
+library(randomForest)
+library(party)
+library(GGally)
+library(reshape2)
+library(arules)
+library(rpart)
+library(readr)
+library(caTools)
+library(party)
+library(partykit)
+library(rpart.plot)
+library(plyr)
+library(scales)
+require(xgboost)
+library(xgboost)
+library(tidyverse)
+library(pROC)
+# general utility functions
+```
+```{r}
+
+```
+
+
+
+```{r}
+my_cols <- c("#E7B800", "#FC4E07")
+#getting working directory
+getwd()
+#reading data
+DataFile = "C:/Users/Master/Documents/Churn Dataset.csv"
+ChurnData = read.csv(DataFile, header=T)
+```
+
+```{r}
+##ScatterMatrix Plot for Catogrical
+df <- ChurnData[c(3,6,19,20)]
+pairs(df,       # Data
+      pch = 19, # Pch symbol
+      col = c("green", "#FC4E27"),  # Color
+      main = "ScatterMatrix Plot",    # Title
+      gap = 0,           # Subplots distance
+      row1attop = FALSE, # Diagonal direction
+      labels = colnames(df), # Labels
+      cex.labels = 0.8,  # Size of diagonal texts
+      font.labels = 1)
+```
+
+
+```{r}
+###heatmap 
+dta<- cor(ChurnData[sapply(ChurnData,is.numeric)])
+cdf <- melt(dta)
+
+ggplot(cdf, aes(Var1, Var2)) +
+  geom_tile(aes(fill = value), colour = "white") +
+  scale_fill_gradient(low = "white", high = "red")
+```
+
+
+```{r}
+#removing nulls from dataset
+sapply(ChurnData, function(x) sum(is.na(x)))
+ChurnData <- ChurnData[complete.cases(ChurnData), ]
+```
+
+
+```{r}
+for(i in 10:15){
+  ChurnData[,i] <- as.factor(mapvalues(ChurnData[,i],
+                                       from= c("No internet service"), to= c("No")))
+}
+
+ChurnData[,8] <- as.factor(mapvalues(ChurnData[,8],
+                                     from= c("No phone service"), to= c("No")))
+```
+
+Since the minimum tenure is 1 month and maximum tenure is 72 months, we can group them into five tenure groups: “0–12 Month”, “12–24 Month”, “24–48 Months”, “48–60 Month”, “> 60 Month”
+
+```{r}
+min(ChurnData$tenure); max(ChurnData$tenure)
+group_tenure <- function(tenure){
+    if (tenure >= 0 & tenure <= 12){
+        return('0-12 Month')
+    }else if(tenure > 12 & tenure <= 24){
+        return('12-24 Month')
+    }else if (tenure > 24 & tenure <= 48){
+        return('24-48 Month')
+    }else if (tenure > 48 & tenure <=60){
+        return('48-60 Month')
+    }else if (tenure > 60){
+        return('> 60 Month')
+    }
+}
+ChurnData$tenure_group <- sapply(ChurnData$tenure,group_tenure)
+ChurnData$tenure_group <- as.factor(ChurnData$tenure_group)
+
+```
+
+
+
+```{r}
+ChurnData$customerID <- NULL
+ChurnData$tenure <- NULL
+```
+
+```{r}
+p1 <- ggplot(ChurnData, aes(x=gender)) + ggtitle("Gender") + xlab("Gender") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p2 <- ggplot(ChurnData, aes(x=SeniorCitizen)) + ggtitle("Senior Citizen") + xlab("Senior Citizen") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p3 <- ggplot(ChurnData, aes(x=Partner)) + ggtitle("Partner") + xlab("Partner") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p4 <- ggplot(ChurnData, aes(x=Dependents)) + ggtitle("Dependents") + xlab("Dependents") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+grid.arrange(p1, p2, p3, p4, ncol=2)
+```
+
+
+```{r}
+p5 <- ggplot(ChurnData, aes(x=PhoneService)) + ggtitle("Phone Service") + xlab("Phone Service") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p6 <- ggplot(ChurnData, aes(x=MultipleLines)) + ggtitle("Multiple Lines") + xlab("Multiple Lines") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p7 <- ggplot(ChurnData, aes(x=InternetService)) + ggtitle("Internet Service") + xlab("Internet Service") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p8 <- ggplot(ChurnData, aes(x=OnlineSecurity)) + ggtitle("Online Security") + xlab("Online Security") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+grid.arrange(p5, p6, p7, p8, ncol=2)
+
+```
+
+```{r}
+p9 <- ggplot(ChurnData, aes(x=OnlineBackup)) + ggtitle("Online Backup") + xlab("Online Backup") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p10 <- ggplot(ChurnData, aes(x=DeviceProtection)) + ggtitle("Device Protection") + xlab("Device Protection") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p11 <- ggplot(ChurnData, aes(x=TechSupport)) + ggtitle("Tech Support") + xlab("Tech Support") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p12 <- ggplot(ChurnData, aes(x=StreamingTV)) + ggtitle("Streaming TV") + xlab("Streaming TV") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+grid.arrange(p9, p10, p11, p12, ncol=2)
+```
+
+
+```{r}
+p13 <- ggplot(ChurnData, aes(x=StreamingMovies)) + ggtitle("Streaming Movies") + xlab("Streaming Movies") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p14 <- ggplot(ChurnData, aes(x=Contract)) + ggtitle("Contract") + xlab("Contract") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p15 <- ggplot(ChurnData, aes(x=PaperlessBilling)) + ggtitle("Paperless Billing") + xlab("Paperless Billing") + 
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p16 <- ggplot(ChurnData, aes(x=PaymentMethod)) + ggtitle("Payment Method") + xlab("Payment Method") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+p17 <- ggplot(ChurnData, aes(x=tenure_group)) + ggtitle("Tenure Group") + xlab("Tenure Group") +
+  geom_bar(aes(y = 100*(..count..)/sum(..count..)), width = 0.5) + ylab("Percentage") + coord_flip() + theme_minimal()
+grid.arrange(p13, p14, p15, p16, p17, ncol=2)
+```
+
+
+```{r}
+columns <-c("Partner", "Dependents", "PhoneService"
+            ,"MultipleLines", "OnlineSecurity","OnlineBackup",
+            "DeviceProtection", "TechSupport","StreamingTV",
+            "StreamingMovies","PaperlessBilling", "Churn","gender"
+            ,"InternetService","Contract","PaymentMethod","tenure_group")
+for (col in names(ChurnData)){
+  for (j in (columns)){
+  if(ChurnData[col]%in%ChurnData[j]){
+    ChurnData[,j] = as.numeric(as.factor(ChurnData[,col])) - 1
+  }}}
+
+```
+
+
+```{r}
+correlationMatrix <- cor(ChurnData)
+# summarize the correlation matrix
+# corrplot(correlationMatrix)
+# find attributes that are highly corrected (ideally > 0.60)
+highlyCorrelated <- findCorrelation(correlationMatrix, cutoff=0.65)
+# print indexes of highly correlated attributes
+print(highlyCorrelated)
+hc = sort(highlyCorrelated)
+```
+
+```{r}
+ChurnData$TotalCharges<- NULL
+```
+
+```{r}
+#Using Corrplot
+source("http://www.sthda.com/upload/rquery_cormat.r") # to use rquery.cormat
+#calculate correlation matrix
+
+cormat<-rquery.cormat(ChurnData, graphType="heatmap")
+
+```
+
+
+```{r}
+set.seed(1112)
+split_train_test <- createDataPartition(ChurnData$Churn,p=0.8,list=FALSE)
+dtrain<- ChurnData[split_train_test,]
+dtest<-  ChurnData[-split_train_test,]
+#Plot decision tree
+rtree <- rpart(Churn ~ ., dtrain ,method ="class")
+#plot conditional parting plot
+ctree_ <- ctree(Churn ~ ., dtrain)
+plot(ctree_)
+rpart.plot(rtree)
+pred  <- predict(rtree , newdata = dtest,type="class")
+confusionMatrix(pred, as.factor( dtest$Churn) ,mode="everything") #check accuracy
+```
+
+```{r}
+roc_score_dt = roc(dtest$Churn, as.numeric(pred))
+plot(roc_score_dt, main="ROC curve -- decision tree")
+print(roc_score_dt)
+```
+
+
+```{r}
+
+etnhancetree2 <- rpart(Churn ~ ., dtrain ,method ="class",parms=list(split ="information"))
+epred2  <- predict(etnhancetree2 , newdata = dtest,type="class",mode="everything")
+confusionMatrix(epred2, as.factor( dtest$Churn) ,mode="everything") #check accuracy
+
+```
+
+```{r}
+roc_score_dt = roc(dtest$Churn, as.numeric(epred2))
+plot(roc_score_dt, main="ROC curve -- enhanced decision tree")
+print(roc_score_dt)
+```
+
+```{r}
+DT_poprune <- rpart(Churn ~ ., dtrain , 
+                    method = "class", 
+                    control = rpart.control(cp = 0.0005)  )
+plotcp(DT_poprune)
+DT_model_pruned <- prune(DT_poprune, cp = 0.004)
+Pred_poprune <- predict(DT_model_pruned, newdata = subset(dtest, select = -c(Churn)),type = "class" )
+table_mat_prune <- table(dtest$Churn,Pred_poprune)
+acc_Test_prune <- sum(diag(table_mat_prune)) / sum(table_mat_prune)
+print(paste("Accuracy:", acc_Test_prune*100))
+
+confusionMatrix(Pred_poprune , as.factor( dtest$Churn), mode = "everything" ) #check accuracy
+
+```
+
+
+```{r}
+roc_score_dt = roc(dtest$Churn, as.numeric(Pred_poprune))
+plot(roc_score_dt, main="ROC curve -- prune decision tree")
+print(roc_score_dt)
+```
+
+
+
+
+```{r}
+#splitting for XGBoost classifier
+
+xtrain = data.matrix(dtrain[1:5626,-18])
+ytrain = data.matrix(dtrain[1:5626,18])
+xgtest = data.matrix(dtest[1:5626,-18])
+ygtest = data.matrix(dtest[1:5626,18])
+
+# train an xgboost model
+bstDense <- xgboost(data =xtrain ,label = ytrain
+                    ,max.depth = 3,
+                    nrounds = 70, gamma=0.8) 
+```
+
+```{r}
+# generate predictions for our held-out testing data
+prediction <- predict(bstDense, xgtest)
+
+predi <- as.numeric(prediction > 0.5 ,  1,0)
+confusionMatrix(factor(predi, levels = c(0,1)), factor(ygtest, levels = c(0,1)), mode = "everything" )
+
+```
+
+```{r}
+roc_score_dt = roc(ygtest, as.numeric(prediction))
+plot(roc_score_dt, main="ROC curve -- xgboost classifier")
+print(roc_score_dt)
+```
+
+
+
+
+```{r}
+library(keras)
+library(tensorflow)
+
+```
+
+
+```{r}
+# split train_set and test_set into 
+# independent variables for train
+X_train <- data.matrix(subset (dtrain, select = -Churn))
+# dependent variables for train
+y_train <- data.matrix(subset (dtrain, select = Churn))
+# independent variables for test
+X_test <- data.matrix(subset (dtest, select = -Churn))
+# dependent variables for test
+y_test <- data.matrix(subset (dtest, select = Churn))
+
+dim(X_train)
+dim(y_train)
+dim(X_test)
+dim(y_test)
+
+```
+
+
+  
+  
+
+```{r}
+
+tensorflow::set_random_seed(42)
+#converting the target variable to once hot encoded vectors using keras inbuilt function
+y_train = to_categorical(y_train,2)
+y_test = to_categorical(y_test, 2)
+```
+
+```{r}
+#defining a keras sequential model by activation function (relu)
+
+model <- keras_model_sequential() 
+model %>% 
+  layer_dense(units = 256, activation = 'relu', input_shape = ncol(X_train)) %>% 
+  layer_dense(units = 128, activation = 'relu') %>%
+  layer_dense(units = ncol(y_train), activation = 'softmax')
+#compiling the defined model with metric = accuracy and optimiser as adam.
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = 'adam',
+  metrics = c('accuracy')
+)
+N_epochs = 75
+
+#The result after fitting the model on the training dataset by 75 epochs.
+
+history = model %>% fit(X_train, y_train, epochs = N_epochs, batch_size = 128)
+plot(history)
+
+```
+```{r}
+
+X_train <- data.matrix(subset (dtrain, select = -Churn))
+# dependent variables for train
+y_train <- data.matrix(subset (dtrain, select = Churn))
+# independent variables for test
+X_test <- data.matrix(subset (dtest, select = -Churn))
+# dependent variables for test
+y_test <- data.matrix(subset (dtest, select = Churn))
+```
+
+
+```{r}
+# getting prediction from A deep neural network using Keras
+predtanh <- model %>% predict(X_test)
+y_predDNNtanh = round(predtanh)%>% k_argmax()
+y_predDNNtanh = as.numeric(y_predDNNtanh)
+
+#A deep neural network using 
+#Keras the activation function of (tanh)
+
+confusionMatrix(as.factor(y_test),as.factor(y_predDNNtanh),mode="everything")
+```
+
+```{r}
+roc_score_dt = roc(as.factor(y_test), as.numeric(y_predDNNtanh))
+plot(roc_score_dt, main="ROC curve -- neural network")
+print(roc_score_dt)
+```
+
+
+
+```{r}
+X_train <- data.matrix(subset (dtrain, select = -Churn))
+# dependent variables for train
+y_train <- data.matrix(subset (dtrain, select = Churn))
+# independent variables for test
+X_test <- data.matrix(subset (dtest, select = -Churn))
+# dependent variables for test
+y_test <- data.matrix(subset (dtest, select = Churn))
+
+tensorflow::set_random_seed(42)
+#converting the target variable to once hot encoded vectors using keras inbuilt function
+y_train = to_categorical(y_train,2)
+y_test = to_categorical(y_test, 2)
+
+```
+
+```{r}
+#defining a keras sequential model by activation function (relu)
+
+model <- keras_model_sequential() 
+model %>% 
+  layer_dense(units = 256, activation = 'tanh', input_shape = ncol(X_train)) %>% 
+  layer_dense(units = 128, activation = 'tanh') %>%
+  layer_dense(units = ncol(y_train), activation = 'softmax')
+#compiling the defined model with metric = accuracy and optimiser as adam.
+model %>% compile(
+  loss = 'categorical_crossentropy',
+  optimizer = 'adam',
+  metrics = c('accuracy')
+)
+N_epochs = 75
+
+#The result after fitting the model on the training dataset by 75 epochs.
+
+history = model %>% fit(X_train, y_train, epochs = N_epochs, batch_size = 128)
+plot(history)
+
+```
+```{r}
+
+X_train <- data.matrix(subset (dtrain, select = -Churn))
+# dependent variables for train
+y_train <- data.matrix(subset (dtrain, select = Churn))
+# independent variables for test
+X_test <- data.matrix(subset (dtest, select = -Churn))
+# dependent variables for test
+y_test <- data.matrix(subset (dtest, select = Churn))
+```
+
+
+```{r}
+# getting prediction from A deep neural network using Keras
+predtanh <- model %>% predict(X_test)
+y_predDNNtanh = round(predtanh)%>% k_argmax()
+y_predDNNtanh = as.numeric(y_predDNNtanh)
+
+#A deep neural network using 
+#Keras the activation function of (tanh)
+
+confusionMatrix(as.factor(y_test),as.factor(y_predDNNtanh),mode="everything")
+```
+
+
+```{r}
+roc_score_dt = roc(as.factor(y_test), as.numeric(y_predDNNtanh))
+plot(roc_score_dt, main="ROC curve --  neural network")
+print(roc_score_dt)
+```
+
+
+```{r}
+#reading data
+df = "C:/Users/Master/Documents/transactions.csv"
+trans = read.transactions(df, sep = ",")
+#plotting most 10 frq transcations
+itemFrequencyPlot(trans, topN = 10)
+image(trans[1:10])
+```
+
+```{r}
+# default settings result in zero rules learned
+apriori(trans)
+
+transrules <- apriori(trans, parameter = list(support = 0.002, confidence =0.20, maxlen = 3))
+lift <-inspect(sort(transrules,by="lift")) 
+
+
+
+```
+
+
+```{r}
+# set better support and confidence levels to learn more rules
+transrules1 <- apriori(trans, parameter = list(support = 0.002, confidence =0.20, maxlen = 2))
+lift <-inspect(sort(transrules1,by="lift")) 
+transrules1
+```
+
